@@ -11,8 +11,6 @@ import scala.jdk.CollectionConverters.*
 def MultiWordCount(): Unit =
   val start = System.currentTimeMillis()
 
-  val cores = Runtime.getRuntime().availableProcessors()
-
   val path = Paths.get("data")
   val files = Files
     .list(path)
@@ -21,21 +19,22 @@ def MultiWordCount(): Unit =
     .toList()
     .asScala
 
-  val map = files
-    .mapPar(cores): file =>
-      Flow
-        .fromFile(file)
-        .decodeStringUtf8
-        .mapConcat(_.split("\\s+"))
-        .map(_.filter(_.isLetterOrDigit).toLowerCase())
-        .filter(_.nonEmpty)
-        .runFold(new mutable.HashMap[String, Int]): (localMap, word) =>
-          localMap(word) = localMap.getOrElse(word, 0) + 1
-          localMap
-    .fold(new mutable.HashMap[String, Int]): (sumMap, localMap) =>
-      localMap.foreach: (word, n) =>
-        sumMap(word) = sumMap.getOrElse(word, 0) + n
-      sumMap
+  val cores = Runtime.getRuntime().availableProcessors()
+  val localMaps = files.mapPar(cores): file =>
+    val localMap = new mutable.HashMap[String, Int]
+    Files
+      .readString(file)
+      .split("\\s+")
+      .map(_.filter(_.isLetterOrDigit).toLowerCase())
+      .filter(_.nonEmpty)
+      .foreach: word =>
+        localMap(word) = localMap.getOrElse(word, 0) + 1
+    localMap
+
+  val map = new mutable.HashMap[String, Int]
+  localMaps.foreach: localMap =>
+    localMap.foreach: (word, n) =>
+      map(word) = map.getOrElse(word, 0) + n
 
   println(s"Map count: ${map.size}")
 
